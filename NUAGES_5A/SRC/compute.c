@@ -46,7 +46,7 @@ void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
   for (size_t x = 1; x < nb_col-1; x++)
     for (size_t y = 1; y < nb_line-1; y++)
     {
-      size_t pos = (x-1) + (y-1) * nb_col;
+      size_t pos = (x-1) + (y-1) * (nb_col-2);
       printf("before %d %d\n", pos, nb_pixels);
 
       pixels[pos] = malloc(sizeof(unsigned) * 5);
@@ -58,6 +58,7 @@ void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
       pixels[pos][4] = img_dst[(x-1) + y * nb_col];   // Left
     }
 
+    return;
   unsigned** centroids = kmeans(nb_line, nb_col, pixels);
 
   // Free pixels neighbours
@@ -106,7 +107,7 @@ int** kmeans(int nb_line, int nb_col, unsigned** pixels)
     for (size_t x = 1; x < nb_col-1; x++)
       for (size_t y = 1; y < nb_line-1; y++)
       {
-        size_t pos = (x-1) + (y-1) * nb_col;
+        size_t pos = (x-1) + (y-1) * (nb_col-2);
 
         size_t best_class = 0;
         double min_dist = DBL_MAX;
@@ -143,7 +144,7 @@ int** kmeans(int nb_line, int nb_col, unsigned** pixels)
     for (size_t x = 1; x < nb_col-1; x++)
       for (size_t y = 1; y < nb_line-1; y++)
       {
-        size_t pos = (x-1) + (y-1) * nb_col;
+        size_t pos = (x-1) + (y-1) * (nb_col-2);
         size_t class = classification[pos];
 
         medians[class][nb_per_class[class]-1] = pixels[pos];
