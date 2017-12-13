@@ -9,7 +9,7 @@ CC=gcc
 OBJ=../OBJ
 EXE=../EXE
 CCFLAGS=-Wall -g `pkg-config --cflags gtk+-2.0`
-LDFLAGS=`pkg-config --libs gtk+-2.0`
+LDFLAGS=`pkg-config --libs gtk+-2.0` -lm
 
 #compilation
 OBJ_FILES=compute.o main.o
