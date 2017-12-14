@@ -182,7 +182,7 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
   {
     for (size_t y = 0; y < nb_line; y++)
     {
-      size_t pos_img = x + y * nb_col;
+      size_t pos_img = (x*3) + y * (nb_col * 3);
       if (!x || !y || x == nb_col-1 || y == nb_line-1)
       {
         img[pos_img] = 0;
@@ -192,7 +192,7 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
       }
 
       size_t pos_pixels = (x-1) + (y-1) * (nb_col-2);
-      unsigned val;
+      unsigned val = 0;
       if (classification[pos_pixels] == cloud_idx)
         val = 255;
       else
