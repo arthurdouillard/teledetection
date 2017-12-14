@@ -42,6 +42,9 @@ void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
   int nb_pixels = (nb_line - 2) * (nb_col - 2);
   unsigned** pixels = malloc(sizeof(unsigned*) * nb_pixels);
 
+  size_t nb_class = 2;
+  size_t vec_size = 5;
+
   // Copy pixels neighbours
   for (size_t x = 1; x < nb_col-1; x++)
     for (size_t y = 1; y < nb_line-1; y++)
@@ -55,10 +58,10 @@ void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
       pixels[pos][2] = img_dst[(x+1) + y * nb_col];   // Right
       pixels[pos][3] = img_dst[x + (y+1) * nb_col]; // Down
       pixels[pos][4] = img_dst[(x-1) + y * nb_col];   // Left
+
+      sort(pixels[pos], vec_size);
     }
 
-  size_t nb_class = 4;
-  size_t vec_size = 5;
   kmeans(nb_line, nb_col, pixels, nb_class, vec_size, img_dst);
 
   for (size_t x = 1; x < nb_col-1; x++)
@@ -116,7 +119,17 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
   int c = 0;
   while (1)
   {
-    if (c > 4)
+    printf("Loop %d\n", c);
+    for (size_t i = 0; i < nb_class; i++)
+    {
+      printf("Center %d\t", i);
+      for (size_t j = 0; j < vec_size; j++)
+        printf(" %d", centers[i][j]);
+      printf("\n");
+    }
+    printf("\n");
+
+    if (c > 1)
       break;
     c++;
     // -----------------------------------
@@ -164,14 +177,6 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
       nb_per_class[i] = 0;
       nb_per_class2[i] = 0;
     }
-
-    for (size_t i = 0; i < nb_class; i++)
-    {
-      printf("Center %d\t", i);
-      for (size_t j = 0; j < vec_size; j++)
-        printf(" %d", centers[i][j]);
-      printf("\n");
-    }
   }
 
 
@@ -218,32 +223,33 @@ void classify_per_centers(int nb_col, int nb_line,
                           unsigned* nb_per_class, unsigned* nb_per_class2,
                           unsigned* classification)
 {
-      for (size_t x = 1; x < nb_col-1; x++)
-      for (size_t y = 1; y < nb_line-1; y++)
+  for (size_t x = 1; x < nb_col-1; x++)
+    for (size_t y = 1; y < nb_line-1; y++)
+    {
+      size_t pos = (x-1) + (y-1) * (nb_col-2);
+
+      size_t best_class = 0;
+      double min_dist = DBL_MAX;
+      for (size_t class_i = 0; class_i < nb_class; class_i++)
       {
-        size_t pos = (x-1) + (y-1) * (nb_col-2);
-
-        size_t best_class = 0;
-        double min_dist = DBL_MAX;
-        for (size_t class_i = 0; class_i < nb_class; class_i++)
+        double dist = cartesian_distance(pixels[pos],
+                                          centers[class_i],
+                                          vec_size);
+        if (dist < min_dist)
         {
-          double dist = cartesian_distance(pixels[pos],
-                                           centers[class_i],
-                                           vec_size);
-          if (dist < min_dist)
-          {
-            min_dist = dist;
-            best_class = class_i;
+          min_dist = dist;
+          best_class = class_i;
 
-            if (!min_dist) // Cannot be closer to a mass center
-              break;
-          }
+          if (!min_dist) // Cannot be closer to a mass center
+            break;
         }
-
-        nb_per_class[best_class]++;
-        nb_per_class2[best_class]++;
-        classification[pos] = best_class;
       }
+
+      printf("%d %d\n", pos,  best_class);
+      nb_per_class[best_class]++;
+      nb_per_class2[best_class]++;
+      classification[pos] = best_class;
+    }
 }
 
 unsigned mean(unsigned* values, unsigned len)
