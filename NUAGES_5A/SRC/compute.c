@@ -37,12 +37,17 @@ DES FONCTIONS
   ---------------------------------------*/
 void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
 {
-  grayscale(nb_line, nb_col, img_src, img_dst);
+  get_percent_clouds(img_src, nb_line, nb_col, img_dst);
+}
+
+double get_percent_clouds(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
+{
+    grayscale(nb_line, nb_col, img_src, img_dst);
 
   int nb_pixels = (nb_line - 2) * (nb_col - 2);
   unsigned** pixels = malloc(sizeof(unsigned*) * nb_pixels);
 
-  size_t nb_class = 2;
+  size_t nb_class = 7;
   size_t vec_size = 5;
 
   // Copy pixels neighbours
@@ -62,12 +67,15 @@ void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
       sort(pixels[pos], vec_size);
     }
 
-  kmeans(nb_line, nb_col, pixels, nb_class, vec_size, img_dst);
+  int nb_clouds = kmeans(nb_line, nb_col, pixels, nb_class, vec_size, img_dst);
+  double percent = ((double)nb_clouds) / nb_pixels * 100;
 
   for (size_t x = 1; x < nb_col-1; x++)
     for (size_t y = 1; y < nb_line-1; y++)
       free(pixels[(x-1) + (y-1) * (nb_col-2)]);
   free(pixels);
+
+  return percent;
 }
 
 size_t get_highest_center(unsigned** centers, size_t nb_class)
@@ -87,7 +95,7 @@ size_t get_highest_center(unsigned** centers, size_t nb_class)
   return best_center_idx;
 }
 
-void kmeans(int nb_line, int nb_col, unsigned** pixels,
+int kmeans(int nb_line, int nb_col, unsigned** pixels,
                   size_t nb_class, size_t vec_size, guchar* img)
 {
   unsigned min_val = 0;
@@ -115,6 +123,7 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
   int loop_counter = 1;
   do
   {
+ /*
     printf("Loop %d\n", loop_counter);
     for (size_t i = 0; i < nb_class; i++)
     {
@@ -124,7 +133,7 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
       printf("\n");
     }
     printf("\n");
-
+*/
     // -----------------------------------
     // 1. Classify pixels per mass centers
     classify_per_centers(nb_col, nb_line, nb_class, vec_size,
@@ -168,7 +177,7 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
 
     for (size_t i = 0; i < nb_class; i++)
     {
-      printf("Class %d\t%d\n", i, nb_per_class2[i]);
+   //   printf("Class %d\t%d\n", i, nb_per_class2[i]);
       nb_per_class[i] = 0;
       nb_per_class2[i] = 0;
     }
@@ -179,7 +188,8 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
   } while (has_changed(centers_history, centers, nb_class)); // End while
 
   size_t cloud_idx = get_highest_center(centers, nb_class);
-  printf("Cloud %d\n", cloud_idx);
+ //printf("Cloud %d\n", cloud_idx);
+  int nb_clouds = 0;
   for (size_t x = 0; x < nb_col; x++)
   {
     for (size_t y = 0; y < nb_line; y++)
@@ -196,7 +206,10 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
       size_t pos_pixels = (x-1) + (y-1) * (nb_col-2);
       unsigned val = 0;
       if (classification[pos_pixels] == cloud_idx)
+      {
         val = 255;
+        nb_clouds++;
+      }
       else
         val = 0;
 
@@ -213,6 +226,8 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
     free(medians[class_i]);
   free(medians);
   free(centers_history);
+
+  return nb_clouds;
 }
 
 int has_changed(unsigned* centers_history, unsigned** centers, size_t nb_class)
@@ -308,7 +323,7 @@ double distance(unsigned* vec1, unsigned* vec2, size_t vec_size)
   {
     int a = vec1[vec_i];
     int b = vec2[vec_i];
-    c += pow(a - b, 2);
+    c += abs(a - b);
   }
 
   return c;
