@@ -42,7 +42,7 @@ void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
   int nb_pixels = (nb_line - 2) * (nb_col - 2);
   unsigned** pixels = malloc(sizeof(unsigned*) * nb_pixels);
 
-  size_t nb_class = 2;
+  size_t nb_class = 4;
   size_t vec_size = 5;
 
   // Copy pixels neighbours
@@ -70,20 +70,16 @@ void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
   free(pixels);
 }
 
-size_t get_highest_center(unsigned** centers, size_t nb_class, size_t vec_size)
+size_t get_highest_center(unsigned** centers, size_t nb_class)
 {
-  double largest_norm = DBL_MIN;
+  unsigned largest = 0;
   size_t best_center_idx = 0;
 
   for (size_t i = 0; i < nb_class; i++)
   {
-    double norm = 0;
-    for (size_t j = 0; j < vec_size; j++)
-      norm += pow(centers[i][j], 2); // No need to compute sqrt here
-
-    if (norm > largest_norm)
+    if (centers[i][0] > largest)
     {
-      norm = largest_norm;
+      largest = centers[i][0];
       best_center_idx = i;
     }
   }
@@ -109,11 +105,12 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
     medians[class_i] = NULL;
 
   // Initialize centroids
+  unsigned range = 255 / nb_class;
   for (size_t class_i = 0; class_i < nb_class; class_i++)
   {
     centers[class_i] = malloc(sizeof(unsigned) * vec_size);
     for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
-      centers[class_i][vec_i] = (rand() % (max_val + 1 - min_val)) + min_val;
+      centers[class_i][vec_i] = range * class_i;//(rand() % (max_val + 1 - min_val)) + min_val;
   }
 
   int c = 0;
@@ -145,7 +142,7 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
         free(medians[class_i]);
       medians[class_i] = calloc(nb_per_class[class_i], sizeof(unsigned));
     }
-    // Aglomerate pixels belonging to each class
+
     for (size_t x = 1; x < nb_col-1; x++)
       for (size_t y = 1; y < nb_line-1; y++)
       {
@@ -169,19 +166,28 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
                      medians[class_i][nb_per_class2[class_i] / 2 + 1]) / 2;
 
       for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
+        if (new_value)
           centers[class_i][vec_i] = new_value;
     }
+/*
+    for (size_t class_i = 0; class_i < nb_class; class_i++)
+    {
+      unsigned new_value = mean(medians[class_i], nb_per_class2[class_i]);
+      for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
+            centers[class_i][vec_i] = new_value;
+    }
+    */
 
     for (size_t i = 0; i < nb_class; i++)
     {
+      printf("Class %d\t%d\n", i, nb_per_class2[i]);
       nb_per_class[i] = 0;
       nb_per_class2[i] = 0;
     }
-  }
 
+  } // End while
 
-
-  size_t cloud_idx = get_highest_center(centers, nb_class, vec_size);
+  size_t cloud_idx = get_highest_center(centers, nb_class);
   printf("Cloud %d\n", cloud_idx);
   for (size_t x = 0; x < nb_col; x++)
   {
@@ -232,9 +238,7 @@ void classify_per_centers(int nb_col, int nb_line,
       double min_dist = DBL_MAX;
       for (size_t class_i = 0; class_i < nb_class; class_i++)
       {
-        double dist = cartesian_distance(pixels[pos],
-                                          centers[class_i],
-                                          vec_size);
+        double dist = distance(pixels[pos], centers[class_i], vec_size);
         if (dist < min_dist)
         {
           min_dist = dist;
@@ -245,7 +249,6 @@ void classify_per_centers(int nb_col, int nb_line,
         }
       }
 
-      printf("%d %d\n", pos,  best_class);
       nb_per_class[best_class]++;
       nb_per_class2[best_class]++;
       classification[pos] = best_class;
@@ -254,6 +257,9 @@ void classify_per_centers(int nb_col, int nb_line,
 
 unsigned mean(unsigned* values, unsigned len)
 {
+  if (!len)
+    return 0;
+
   unsigned c = 0;
   for (size_t i = 0; i < len; i++)
     c += values[i];
@@ -279,21 +285,21 @@ void sort(unsigned* values, unsigned len)
       break;
 
     int temp = values[i];
-    values[i]     = values[j];
-    values[j]     = temp;
+    values[i] = values[j];
+    values[j] = temp;
   }
 
   sort(values, i);
   sort(values + i, len - i);
 }
 
-double cartesian_distance(unsigned* vec1, unsigned* vec2, size_t vec_size)
+double distance(unsigned* vec1, unsigned* vec2, size_t vec_size)
 {
   unsigned long c = 0;
   for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
-    c += pow(vec1[vec_i] - vec2[vec_i], 2);
+    c += abs(vec1[vec_i] - vec2[vec_i]);
 
-  return sqrt(c);
+  return c;
 }
 
 
