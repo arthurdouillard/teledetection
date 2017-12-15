@@ -42,7 +42,7 @@ void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
   int nb_pixels = (nb_line - 2) * (nb_col - 2);
   unsigned** pixels = malloc(sizeof(unsigned*) * nb_pixels);
 
-  size_t nb_class = 4;
+  size_t nb_class = 2;
   size_t vec_size = 5;
 
   // Copy pixels neighbours
@@ -56,7 +56,7 @@ void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
       pixels[pos][0] = img_dst[x + y * nb_col];       // Current pixel
       pixels[pos][1] = img_dst[x + (y-1) * nb_col];   // Up
       pixels[pos][2] = img_dst[(x+1) + y * nb_col];   // Right
-      pixels[pos][3] = img_dst[x + (y+1) * nb_col]; // Down
+      pixels[pos][3] = img_dst[x + (y+1) * nb_col];   // Down
       pixels[pos][4] = img_dst[(x-1) + y * nb_col];   // Left
 
       sort(pixels[pos], vec_size);
@@ -90,8 +90,6 @@ size_t get_highest_center(unsigned** centers, size_t nb_class)
 void kmeans(int nb_line, int nb_col, unsigned** pixels,
                   size_t nb_class, size_t vec_size, guchar* img)
 {
-  srand(time(NULL));
-
   unsigned min_val = 0;
   unsigned max_val = 255;
   int nb_pixels = (nb_line - 2) * (nb_col - 2);
@@ -99,24 +97,25 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
   unsigned* nb_per_class = calloc(nb_class, sizeof(unsigned));
   unsigned* nb_per_class2 = calloc(nb_class, sizeof(unsigned));
   unsigned** centers = malloc(sizeof(unsigned*) * nb_class);
-
   unsigned** medians = malloc(sizeof(unsigned*) * nb_class);
+  unsigned* centers_history = malloc(sizeof(unsigned) * nb_class);
+
+  unsigned range = 255 / (nb_class - 1);
   for (size_t class_i = 0; class_i < nb_class; class_i++)
+  {
     medians[class_i] = NULL;
 
-  // Initialize centroids
-  unsigned range = 255 / nb_class;
-  for (size_t class_i = 0; class_i < nb_class; class_i++)
-  {
     centers[class_i] = malloc(sizeof(unsigned) * vec_size);
     for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
-      centers[class_i][vec_i] = range * class_i;//(rand() % (max_val + 1 - min_val)) + min_val;
+      centers[class_i][vec_i] = range * class_i;
+
+    centers_history[class_i] = centers[class_i][0];
   }
 
-  int c = 0;
-  while (1)
+  int loop_counter = 1;
+  do
   {
-    printf("Loop %d\n", c);
+    printf("Loop %d\n", loop_counter);
     for (size_t i = 0; i < nb_class; i++)
     {
       printf("Center %d\t", i);
@@ -126,9 +125,6 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
     }
     printf("\n");
 
-    if (c > 1)
-      break;
-    c++;
     // -----------------------------------
     // 1. Classify pixels per mass centers
     classify_per_centers(nb_col, nb_line, nb_class, vec_size,
@@ -138,7 +134,7 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
     // 2. Compute new mass centers
     for (size_t class_i = 0; class_i < nb_class; class_i++)
     {
-      if (!c)
+      if (loop_counter == 1)
         free(medians[class_i]);
       medians[class_i] = calloc(nb_per_class[class_i], sizeof(unsigned));
     }
@@ -166,17 +162,9 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
                      medians[class_i][nb_per_class2[class_i] / 2 + 1]) / 2;
 
       for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
-        if (new_value)
+        if (nb_per_class2[class_i])
           centers[class_i][vec_i] = new_value;
     }
-/*
-    for (size_t class_i = 0; class_i < nb_class; class_i++)
-    {
-      unsigned new_value = mean(medians[class_i], nb_per_class2[class_i]);
-      for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
-            centers[class_i][vec_i] = new_value;
-    }
-    */
 
     for (size_t i = 0; i < nb_class; i++)
     {
@@ -185,7 +173,10 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
       nb_per_class2[i] = 0;
     }
 
-  } // End while
+    if (loop_counter > 30)
+      break;
+    loop_counter++;
+  } while (has_changed(centers_history, centers, nb_class)); // End while
 
   size_t cloud_idx = get_highest_center(centers, nb_class);
   printf("Cloud %d\n", cloud_idx);
@@ -221,7 +212,23 @@ void kmeans(int nb_line, int nb_col, unsigned** pixels,
   for (size_t class_i = 0; class_i < nb_class; class_i++)
     free(medians[class_i]);
   free(medians);
+  free(centers_history);
 }
+
+int has_changed(unsigned* centers_history, unsigned** centers, size_t nb_class)
+{
+  int nb_changed = 0; // Not changed
+  for (size_t i = 0; i < nb_class; i++)
+  {
+    if (centers_history[i] != centers[i][0])
+      nb_changed++;
+
+    centers_history[i] = centers[i][0];
+  }
+
+  return nb_changed;
+}
+
 
 void classify_per_centers(int nb_col, int nb_line,
                           size_t nb_class, size_t vec_size,
@@ -246,6 +253,7 @@ void classify_per_centers(int nb_col, int nb_line,
 
           if (!min_dist) // Cannot be closer to a mass center
             break;
+
         }
       }
 
@@ -295,9 +303,13 @@ void sort(unsigned* values, unsigned len)
 
 double distance(unsigned* vec1, unsigned* vec2, size_t vec_size)
 {
-  unsigned long c = 0;
+  double c = 0.0;
   for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
-    c += abs(vec1[vec_i] - vec2[vec_i]);
+  {
+    int a = vec1[vec_i];
+    int b = vec2[vec_i];
+    c += pow(a - b, 2);
+  }
 
   return c;
 }

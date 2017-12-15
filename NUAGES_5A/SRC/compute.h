@@ -16,3 +16,4 @@ void classify_per_centers(int nb_col, int nb_line,
                           unsigned** pixels, unsigned** centers,
                           unsigned* nb_per_class, unsigned* nb_per_class2,
                           unsigned* classification);
+int has_changed(unsigned* centers_history, unsigned** centers, size_t nb_class);
