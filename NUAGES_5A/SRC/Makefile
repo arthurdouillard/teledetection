@@ -12,15 +12,21 @@ CCFLAGS=-Wall -g `pkg-config --cflags gtk+-2.0`
 LDFLAGS=`pkg-config --libs gtk+-2.0` -lm
 
 #compilation
-OBJ_FILES=compute.o main.o
+OBJ_FILES_IMG=compute.o main.o
+OBJ_FILES_AUTO=compute.o auto.o
 
-all: ImaProjet.exe
+all: ImaProjet.exe ImaProjet_auto.exe dirty_obj
 
 .c.o:
 	${CC} ${CCFLAGS} -o $@ -c $<
 
-ImaProjet.exe:${OBJ_FILES}
-	${CC} -o ${EXE}/$@ ${OBJ_FILES} ${LDFLAGS} -g
+ImaProjet.exe:${OBJ_FILES_IMG}
+	${CC} -o ${EXE}/$@ ${OBJ_FILES_IMG} ${LDFLAGS} -g
+
+ImaProjet_auto.exe:${OBJ_FILES_AUTO}
+	${CC} -o ${EXE}/$@ ${OBJ_FILES_AUTO} ${LDFLAGS} -g
+
+dirty_obj:
 	mv *.o ${OBJ}
 
 clean:
