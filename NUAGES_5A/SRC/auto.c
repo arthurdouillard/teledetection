@@ -20,8 +20,6 @@ void process_img(char* name)
     if (!check_ext(name))
         return;
 
-    printf("%s\n", name);
-
     GError* error = NULL;
     GdkPixbuf* pix = gdk_pixbuf_new_from_file(name, &error);
     if (pix == NULL)
@@ -40,7 +38,7 @@ void process_img(char* name)
     int nb_line = gdk_pixbuf_get_height(pix);
 
     double percent = get_percent_clouds(img_src, nb_line, nb_col, img_dst);
-    printf("Percentage of clouds:\t%.2f\%\n", percent);
+    printf("Image: %s\tPercentage of clouds:\t%.2f %%\n", name, percent);
 }
 
 int main(void)
