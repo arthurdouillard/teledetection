@@ -37,309 +37,196 @@ DES FONCTIONS
   ---------------------------------------*/
 void ComputeImage(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
 {
-  get_percent_clouds(img_src, nb_line, nb_col, img_dst);
+  ImageFormat fmt =
+  {
+    .nb_line = nb_line,
+    .nb_col = nb_col,
+    .nb_chan = 3
+  };
+
+  get_percent_clouds(img_src, img_dst, fmt);
 }
 
-double get_percent_clouds(guchar *img_src, int nb_line, int nb_col, guchar *img_dst)
+double get_percent_clouds(guchar *img_src, guchar *img_dst, ImageFormat fmt)
 {
-    grayscale(nb_line, nb_col, img_src, img_dst);
-
-  int nb_pixels = (nb_line - 2) * (nb_col - 2);
+  grayscale(img_src, img_dst, fmt);
+  int nb_pixels = (fmt.nb_line - 2) * (fmt.nb_col - 2);
   unsigned** pixels = malloc(sizeof(unsigned*) * nb_pixels);
+  init_pixels(pixels, fmt, img_dst);
 
-  size_t nb_class = 7;
-  size_t vec_size = 5;
-
-  // Copy pixels neighbours
-  for (size_t x = 1; x < nb_col-1; x++)
-    for (size_t y = 1; y < nb_line-1; y++)
-    {
-      size_t pos = (x-1) + (y-1) * (nb_col-2);
-
-      pixels[pos] = malloc(sizeof(unsigned) * 5);
-
-      pixels[pos][0] = img_dst[x + y * nb_col];       // Current pixel
-      pixels[pos][1] = img_dst[x + (y-1) * nb_col];   // Up
-      pixels[pos][2] = img_dst[(x+1) + y * nb_col];   // Right
-      pixels[pos][3] = img_dst[x + (y+1) * nb_col];   // Down
-      pixels[pos][4] = img_dst[(x-1) + y * nb_col];   // Left
-
-      sort(pixels[pos], vec_size);
-    }
-
-  int nb_clouds = kmeans(nb_line, nb_col, pixels, nb_class, vec_size, img_dst);
+  int nb_clouds = kmeans(pixels, fmt, img_dst);
   double percent = ((double)nb_clouds) / nb_pixels * 100;
 
-  for (size_t x = 1; x < nb_col-1; x++)
-    for (size_t y = 1; y < nb_line-1; y++)
-      free(pixels[(x-1) + (y-1) * (nb_col-2)]);
+  for (size_t x = 1; x < fmt.nb_col-1; x++)
+    for (size_t y = 1; y < fmt.nb_line-1; y++)
+      free(pixels[get_pos(x-1, y-1, fmt.nb_col-2)]);
   free(pixels);
 
   return percent;
 }
 
-size_t get_highest_center(unsigned** centers, size_t nb_class)
+
+int kmeans(unsigned** pixels, ImageFormat fmt, guchar* img)
 {
-  unsigned largest = 0;
-  size_t best_center_idx = 0;
+  unsigned* centers = init_centers();
+  unsigned* history_centers = malloc(sizeof(unsigned) * NB_CLASS);
 
-  for (size_t i = 0; i < nb_class; i++)
+  unsigned** medians = init_medians();
+  unsigned* classification = init_classification(fmt);
+
+  unsigned* nb_per_class = malloc(sizeof(unsigned) * NB_CLASS);
+  unsigned* nb_per_class2 = malloc(sizeof(unsigned) * NB_CLASS);
+
+
+  int loop_counter = 0;
+  do // Loop of the K-means algorithm
   {
-    if (centers[i][0] > largest)
-    {
-      largest = centers[i][0];
-      best_center_idx = i;
-    }
-  }
+    copy_array(centers, history_centers); // Save previous mass centers
 
-  return best_center_idx;
-}
+    // 1. Associate pixels to mass centers
+    classify(nb_per_class, centers, classification, pixels, fmt);
 
-int kmeans(int nb_line, int nb_col, unsigned** pixels,
-                  size_t nb_class, size_t vec_size, guchar* img)
-{
-  unsigned min_val = 0;
-  unsigned max_val = 255;
-  int nb_pixels = (nb_line - 2) * (nb_col - 2);
-  unsigned* classification = calloc(nb_pixels, sizeof(unsigned));
-  unsigned* nb_per_class = calloc(nb_class, sizeof(unsigned));
-  unsigned* nb_per_class2 = calloc(nb_class, sizeof(unsigned));
-  unsigned** centers = malloc(sizeof(unsigned*) * nb_class);
-  unsigned** medians = malloc(sizeof(unsigned*) * nb_class);
-  unsigned* centers_history = malloc(sizeof(unsigned) * nb_class);
+    // 2. Update mass centers
+    copy_array(nb_per_class, nb_per_class2);
+    update_medians(nb_per_class, classification, medians, pixels, fmt);
+    update_centers(nb_per_class2, centers, medians);
 
-  unsigned range = 255 / (nb_class - 1);
-  for (size_t class_i = 0; class_i < nb_class; class_i++)
-  {
-    medians[class_i] = NULL;
 
-    centers[class_i] = malloc(sizeof(unsigned) * vec_size);
-    for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
-      centers[class_i][vec_i] = range * class_i;
+  } while (loop_counter++ > 100 || has_changed(centers, history_centers));
 
-    centers_history[class_i] = centers[class_i][0];
-  }
+  classify(nb_per_class2, centers, classification, pixels, fmt);
 
-  int loop_counter = 1;
-  do
-  {
- /*
-    printf("Loop %d\n", loop_counter);
-    for (size_t i = 0; i < nb_class; i++)
-    {
-      printf("Center %d\t", i);
-      for (size_t j = 0; j < vec_size; j++)
-        printf(" %d", centers[i][j]);
-      printf("\n");
-    }
-    printf("\n");
-*/
-    // -----------------------------------
-    // 1. Classify pixels per mass centers
-    classify_per_centers(nb_col, nb_line, nb_class, vec_size,
-                         pixels, centers, nb_per_class, nb_per_class2, classification);
-
-    // -----------------------------------
-    // 2. Compute new mass centers
-    for (size_t class_i = 0; class_i < nb_class; class_i++)
-    {
-      if (loop_counter == 1)
-        free(medians[class_i]);
-      medians[class_i] = calloc(nb_per_class[class_i], sizeof(unsigned));
-    }
-
-    for (size_t x = 1; x < nb_col-1; x++)
-      for (size_t y = 1; y < nb_line-1; y++)
-      {
-        size_t pos = (x-1) + (y-1) * (nb_col-2);
-        size_t class = classification[pos];
-
-        medians[class][nb_per_class[class]-1] = mean(pixels[pos], vec_size);
-        nb_per_class[class]--;
-      }
-
-    // Sort each group of pixels
-    for (size_t class_i = 0; class_i < nb_class; class_i++)
-    {
-      sort(medians[class_i], nb_per_class2[class_i]);
-
-      unsigned new_value;
-      if (nb_per_class2[class_i] % 2 != 0) // Odd
-        new_value = medians[class_i][nb_per_class2[class_i] / 2];
-      else // Even
-        new_value = (medians[class_i][nb_per_class2[class_i] / 2] +\
-                     medians[class_i][nb_per_class2[class_i] / 2 + 1]) / 2;
-
-      for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
-        if (nb_per_class2[class_i])
-          centers[class_i][vec_i] = new_value;
-    }
-
-    for (size_t i = 0; i < nb_class; i++)
-    {
-   //   printf("Class %d\t%d\n", i, nb_per_class2[i]);
-      nb_per_class[i] = 0;
-      nb_per_class2[i] = 0;
-    }
-
-    if (loop_counter > 30)
-      break;
-    loop_counter++;
-  } while (has_changed(centers_history, centers, nb_class)); // End while
-
-  size_t cloud_idx = get_highest_center(centers, nb_class);
- //printf("Cloud %d\n", cloud_idx);
-  int nb_clouds = 0;
-  for (size_t x = 0; x < nb_col; x++)
-  {
-    for (size_t y = 0; y < nb_line; y++)
-    {
-      size_t pos_img = (x*3) + y * (nb_col * 3);
-      if (!x || !y || x == nb_col-1 || y == nb_line-1)
-      {
-        img[pos_img] = 0;
-        img[pos_img+1] = 0;
-        img[pos_img+2] = 0;
-        continue;
-      }
-
-      size_t pos_pixels = (x-1) + (y-1) * (nb_col-2);
-      unsigned val = 0;
-      if (classification[pos_pixels] == cloud_idx)
-      {
-        val = 255;
-        nb_clouds++;
-      }
-      else
-        val = 0;
-
-      img[pos_img] = val;
-      img[pos_img+1] = val;
-      img[pos_img+2] = val;
-    }
-  }
+  int nb_clouds = draw_clouds(img, fmt, classification);
 
   free(nb_per_class);
   free(nb_per_class2);
+  free(centers);
+  free(history_centers);
   free(classification);
-  for (size_t class_i = 0; class_i < nb_class; class_i++)
-    free(medians[class_i]);
-  free(medians);
-  free(centers_history);
+  free_medians(medians);
 
   return nb_clouds;
 }
 
-int has_changed(unsigned* centers_history, unsigned** centers, size_t nb_class)
-{
-  int nb_changed = 0; // Not changed
-  for (size_t i = 0; i < nb_class; i++)
-  {
-    if (centers_history[i] != centers[i][0])
-      nb_changed++;
 
-    centers_history[i] = centers[i][0];
+int draw_clouds(guchar* img, ImageFormat fmt, unsigned* classification)
+{
+  int nb_clouds = 0;
+  for (size_t x = 1; x < fmt.nb_col-1; x++)
+  {
+    for (size_t y = 1; y < fmt.nb_line-1; y++)
+    {
+      size_t pos = get_pos(x-1, y-1, fmt.nb_col-2);
+      size_t class = classification[pos];
+
+      if (class >= NB_CLASS - N_BEST)
+      {
+        nb_clouds++;
+        size_t pos_img = get_pos(x, y, fmt.nb_col) * 3;
+        img[pos_img] = 255;
+        img[pos_img+1] = 0;
+        img[pos_img+2] = 0;
+      }
+    }
   }
 
-  return nb_changed;
+  return nb_clouds;
+}
+
+void update_centers(unsigned* nb_per_class, unsigned* centers,
+                    unsigned** medians)
+{
+  for (size_t i = 0; i < NB_CLASS; i++)
+  {
+    sort(medians[i], nb_per_class[i]);
+
+    if (nb_per_class[i])
+      centers[i] = medians[i][nb_per_class[i] / 2];
+  }
+}
+
+void update_medians(unsigned* nb_per_class, unsigned* classification,
+                    unsigned** medians, unsigned** pixels, ImageFormat fmt)
+{
+  for (size_t i = 0; i < NB_CLASS; i++)
+  {
+    if (medians[i])
+      free(medians[i]);
+
+    medians[i] = malloc(sizeof(unsigned) * nb_per_class[i] * VEC_SIZE);
+  }
+
+  for (size_t x = 1; x < fmt.nb_col-1; x++)
+  {
+    for (size_t y = 1; y < fmt.nb_line-1; y++)
+    {
+      size_t pos = get_pos(x-1, y-1, fmt.nb_col-2);
+      size_t class = classification[pos];
+
+      for (size_t i = 0; i < VEC_SIZE; i++)
+        medians[class][(nb_per_class[class] - 1) * VEC_SIZE + i] = pixels[pos][i];
+
+      nb_per_class[class]--;
+    }
+  }
 }
 
 
-void classify_per_centers(int nb_col, int nb_line,
-                          size_t nb_class, size_t vec_size,
-                          unsigned** pixels, unsigned** centers,
-                          unsigned* nb_per_class, unsigned* nb_per_class2,
-                          unsigned* classification)
+void classify(unsigned* nb_per_class, unsigned* centers,
+              unsigned* classification, unsigned** pixels,
+              ImageFormat fmt)
 {
-  for (size_t x = 1; x < nb_col-1; x++)
-    for (size_t y = 1; y < nb_line-1; y++)
+  for (size_t i = 0; i < NB_CLASS; i++)
+    nb_per_class[i] = 0;
+
+  for (size_t x = 1; x < fmt.nb_col-1; x++)
+  {
+    for (size_t y = 1; y < fmt.nb_line-1; y++)
     {
-      size_t pos = (x-1) + (y-1) * (nb_col-2);
+      size_t pos = get_pos(x-1, y-1, fmt.nb_col-2);
 
-      size_t best_class = 0;
-      double min_dist = DBL_MAX;
-      for (size_t class_i = 0; class_i < nb_class; class_i++)
+      unsigned best_class = 0;
+      double dist = DBL_MAX;
+
+      for (size_t i = 0; i < NB_CLASS; i++)
       {
-        double dist = distance(pixels[pos], centers[class_i], vec_size);
-        if (dist < min_dist)
+        double new_dist = distance(pixels[pos], centers[i]);
+        if (new_dist < dist)
         {
-          min_dist = dist;
-          best_class = class_i;
-
-          if (!min_dist) // Cannot be closer to a mass center
-            break;
-
+          best_class = i;
+          dist = new_dist;
         }
       }
 
-      nb_per_class[best_class]++;
-      nb_per_class2[best_class]++;
       classification[pos] = best_class;
+      nb_per_class[best_class]++;
     }
-}
-
-unsigned mean(unsigned* values, unsigned len)
-{
-  if (!len)
-    return 0;
-
-  unsigned c = 0;
-  for (size_t i = 0; i < len; i++)
-    c += values[i];
-
-  return c / len;
-}
-
-void sort(unsigned* values, unsigned len)
-{
-  if (len < 2)
-    return;
-
-  int pivot = values[len / 2];
-
-  int i, j;
-  for (i = 0, j = len - 1; ; i++, j--) {
-    while (values[i] < pivot)
-      i++;
-    while (values[j] > pivot)
-      j--;
-
-    if (i >= j)
-      break;
-
-    int temp = values[i];
-    values[i] = values[j];
-    values[j] = temp;
   }
-
-  sort(values, i);
-  sort(values + i, len - i);
 }
 
-double distance(unsigned* vec1, unsigned* vec2, size_t vec_size)
+double distance(unsigned* pixels, unsigned center)
 {
-  double c = 0.0;
-  for (size_t vec_i = 0; vec_i < vec_size; vec_i++)
+  double dist = 0.0;
+  int b = center;
+
+  for (size_t i = 0; i < VEC_SIZE; i++)
   {
-    int a = vec1[vec_i];
-    int b = vec2[vec_i];
-    c += abs(a - b);
+    int a = pixels[i];
+    dist += abs(a - b);
   }
 
-  return c;
+  return dist;
 }
 
-
-void grayscale(int nb_line, int nb_col, guchar* img_src, guchar* img_dst)
+int has_changed(unsigned* a, unsigned* b)
 {
-  int nb_pixels = nb_line * nb_col;
-  int nb_channels = 3;
+  for (size_t i = 0; i < NB_CLASS; i++)
+    if (a[i] != b[i])
+      return 1;
 
-  for(int i = 0; i < nb_pixels * nb_channels; i += nb_channels)
-  {
-    int pixel = (unsigned char)((*(img_src + i) + *(img_src + i+1) + *(img_src + i+2)) / 3);
-
-    for(int channel_i = 0; channel_i < nb_channels; channel_i++)
-      *(img_dst + i+channel_i) = pixel;
-  }
+  return 0;
 }
+
+
+
+

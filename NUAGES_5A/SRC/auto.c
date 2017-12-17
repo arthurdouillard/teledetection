@@ -37,7 +37,13 @@ void process_img(char* name)
     int nb_col = gdk_pixbuf_get_width(pix);
     int nb_line = gdk_pixbuf_get_height(pix);
 
-    double percent = get_percent_clouds(img_src, nb_line, nb_col, img_dst);
+    ImageFormat fmt =
+    {
+        .nb_col = nb_col,
+        .nb_line = nb_line,
+        .nb_chan = 3
+    };
+    double percent = get_percent_clouds(img_src, img_dst, fmt);
     printf("Image: %s\tPercentage of clouds:\t%.2f %%\n", name, percent);
 }
 
