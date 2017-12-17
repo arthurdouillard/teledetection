@@ -47,14 +47,24 @@ void process_img(char* name)
     printf("Image: %s\tPercentage of clouds:\t%.2f %%\n", name, percent);
 }
 
-int main(void)
+int main(int argc, char* argv[])
 {
-  DIR *d = opendir(".");
+  if (argc != 2)
+    exit(1);
+
+  DIR *d = opendir(argv[1]);
+  size_t len_dir = strlen(argv[1]);
   struct dirent *dir;
+
   if (d)
   {
     while ((dir = readdir(d)) != NULL)
-      process_img(dir->d_name);
+    {
+      char* path = malloc(len_dir + strlen(dir->d_name) + 2);
+      sprintf(path, "%s/%s", argv[1], dir->d_name);
+      process_img(path);
+      free(path);
+    }
 
     closedir(d);
   }

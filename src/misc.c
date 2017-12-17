@@ -5,7 +5,7 @@ void sort(unsigned* values, unsigned len)
   if (len < 2)
     return;
 
-  int pivot = values[len / 2];
+  unsigned pivot = values[len / 2];
 
   int i, j;
   for (i = 0, j = len - 1; ; i++, j--) {
@@ -82,8 +82,8 @@ unsigned* init_centers()
 */
 void init_pixels(unsigned** pixels, ImageFormat fmt, guchar* img)
 {
-  int nb_col = fmt.nb_col;
-  int nb_line = fmt.nb_line;
+  unsigned nb_col = fmt.nb_col;
+  unsigned nb_line = fmt.nb_line;
 
   for (size_t x = 1; x < nb_col-1; x++)
   {
@@ -119,7 +119,7 @@ void grayscale(guchar* img_src, guchar* img_dst, ImageFormat fmt)
 
           int v = 0;
           for (size_t chan = 0; chan < fmt.nb_chan; chan++)
-            v += img_dst[pos+chan];
+            v += img_src[pos+chan];
           v /= fmt.nb_chan;
 
           for (size_t chan = 0; chan < fmt.nb_chan; chan++)

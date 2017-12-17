@@ -15,9 +15,9 @@
 
 typedef struct
 {
-    int nb_line;
-    int nb_col;
-    int nb_chan;
+    unsigned nb_line;
+    unsigned nb_col;
+    unsigned nb_chan;
 } ImageFormat;
 
 
